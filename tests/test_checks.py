@@ -2,43 +2,14 @@ import time
 from unittest.mock import MagicMock, patch
 
 import httpx
-import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
+from sqlalchemy.exc import IntegrityError
 
-from database import Base, get_db
+from checks import _evaluate_incidents
 from main import app
-
-
-engine = create_engine(
-    "sqlite:///:memory:",
-    connect_args={"check_same_thread": False},
-    poolclass=StaticPool,
-)
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base.metadata.create_all(bind=engine)
-
-
-def override_get_db():
-    db = TestingSessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
-app.dependency_overrides[get_db] = override_get_db
+from models import Check
 
 client = TestClient(app)
-
-
-@pytest.fixture(autouse=True)
-def clean_db():
-    Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
-    yield
 
 
 def _create_endpoint():
@@ -187,3 +158,36 @@ def test_list_checks_endpoint_not_found():
     response = client.get("/endpoints/999/checks")
     assert response.status_code == 404
     assert response.json()["detail"] == "Endpoint not found"
+
+
+def test_evaluate_incidents_catches_integrity_error():
+    """Simulate a race where the open-incident query returns None but the
+    flush fails because another transaction inserted the row first.
+    """
+    mock_db = MagicMock()
+
+    check_query = MagicMock()
+    check_query.filter.return_value.order_by.return_value.limit.return_value.all.return_value = [
+        MagicMock(success=False),
+        MagicMock(success=False),
+        MagicMock(success=False),
+    ]
+
+    existing_incident = MagicMock()
+    existing_incident.failure_count = 3
+
+    incident_query = MagicMock()
+    incident_query.filter.return_value.first.side_effect = [None, existing_incident]
+
+    def query_side_effect(model):
+        if model is Check:
+            return check_query
+        return incident_query
+
+    mock_db.query.side_effect = query_side_effect
+    mock_db.flush.side_effect = IntegrityError("mock", "mock", Exception("duplicate"))
+
+    _evaluate_incidents(mock_db, endpoint_id=1, success=False)
+
+    mock_db.rollback.assert_called_once()
+    assert existing_incident.failure_count == 4

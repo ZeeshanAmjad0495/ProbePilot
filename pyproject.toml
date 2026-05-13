@@ -10,3 +10,15 @@ dependencies = [
     "sqlalchemy>=2.0.49",
     "uvicorn>=0.46.0",
 ]
+
+[dependency-groups]
+dev = [
+    "bandit>=1.9.4",
+    "mypy>=2.1.0",
+    "pip-audit>=2.10.0",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.15.12",
+]
+
+[tool.mypy]
+plugins = ["sqlalchemy.ext.mypy.plugin"]
