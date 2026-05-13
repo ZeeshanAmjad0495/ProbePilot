@@ -21,4 +21,7 @@ dev = [
 ]
 
 [tool.mypy]
-plugins = ["sqlalchemy.ext.mypy.plugin"]
+# DeclarativeBase + Mapped[T] gives native type support for SQLAlchemy 2.x;
+# the legacy `sqlalchemy.ext.mypy.plugin` is deprecated and conflicts with
+# the modern declarative style (it synthesises a wrongly-typed __init__).
+plugins = []
