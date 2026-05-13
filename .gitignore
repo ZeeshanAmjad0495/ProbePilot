@@ -36,3 +36,6 @@ venv/
 
 # uv
 .python-version
+
+# ForgeLoop
+.forgeloop/
