@@ -34,6 +34,15 @@ venv/
 # pytest
 .pytest_cache/
 
+# coverage
+.coverage
+
+# ruff
+.ruff_cache/
+
+# mypy
+.mypy_cache/
+
 # uv
 .python-version
 

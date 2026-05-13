@@ -1,13 +1,20 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 
-from database import engine, Base
+import database
 from endpoints import router as endpoints_router
 from checks import router as checks_router
 from incidents import router as incidents_router
 
-Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="ProbePilot")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    database.Base.metadata.create_all(bind=database.engine)
+    yield
+
+
+app = FastAPI(title="ProbePilot", lifespan=lifespan)
 app.include_router(endpoints_router)
 app.include_router(checks_router)
 app.include_router(incidents_router)

@@ -1,4 +1,6 @@
+import pytest
 from sqlalchemy import create_engine
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 
 from database import Base
@@ -65,3 +67,66 @@ def test_check_and_incident_models():
     assert retrieved_incident.resolved_at is None
 
     session.close()
+
+
+def test_duplicate_open_incident_raises_integrity_error(db_session):
+    endpoint = Endpoint(
+        name="Test API",
+        url="https://example.com/api",
+        expected_status_code=200,
+        timeout_seconds=3.0,
+    )
+    db_session.add(endpoint)
+    db_session.commit()
+    db_session.refresh(endpoint)
+
+    incident1 = Incident(
+        endpoint_id=endpoint.id,
+        title="First failure",
+        status="open",
+        failure_count=3,
+    )
+    db_session.add(incident1)
+    db_session.commit()
+
+    incident2 = Incident(
+        endpoint_id=endpoint.id,
+        title="Second failure",
+        status="open",
+        failure_count=3,
+    )
+    db_session.add(incident2)
+    with pytest.raises(IntegrityError):
+        db_session.commit()
+
+
+def test_resolved_incident_does_not_block_new_open(db_session):
+    endpoint = Endpoint(
+        name="Test API",
+        url="https://example.com/api",
+        expected_status_code=200,
+        timeout_seconds=3.0,
+    )
+    db_session.add(endpoint)
+    db_session.commit()
+    db_session.refresh(endpoint)
+
+    resolved = Incident(
+        endpoint_id=endpoint.id,
+        title="Old failure",
+        status="resolved",
+        failure_count=3,
+    )
+    db_session.add(resolved)
+    db_session.commit()
+
+    new_open = Incident(
+        endpoint_id=endpoint.id,
+        title="New failure",
+        status="open",
+        failure_count=3,
+    )
+    db_session.add(new_open)
+    db_session.commit()
+
+    assert new_open.id is not None

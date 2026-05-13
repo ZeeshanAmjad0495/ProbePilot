@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import desc
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -53,6 +54,18 @@ def _evaluate_incidents(db: Session, endpoint_id: int, success: bool) -> None:
             failure_count=3,
         )
         db.add(incident)
+        try:
+            db.flush()
+        except IntegrityError:
+            db.rollback()
+            open_incident = (
+                db.query(Incident)
+                .filter(Incident.endpoint_id == endpoint_id, Incident.status == "open")
+                .first()
+            )
+            if open_incident:
+                open_incident.failure_count += 1
+                open_incident.updated_at = datetime.now(timezone.utc)
 
 
 @router.post("/{endpoint_id}/checks", response_model=CheckResponse, status_code=status.HTTP_201_CREATED)
