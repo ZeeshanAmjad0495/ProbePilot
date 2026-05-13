@@ -1,4 +1,5 @@
 import time
+from datetime import datetime, timezone
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -6,10 +7,52 @@ from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import Check, Endpoint
+from models import Check, Endpoint, Incident
 from schemas import CheckResponse
 
 router = APIRouter(prefix="/endpoints", tags=["checks"])
+
+
+def _evaluate_incidents(db: Session, endpoint_id: int, success: bool) -> None:
+    if success:
+        open_incident = (
+            db.query(Incident)
+            .filter(Incident.endpoint_id == endpoint_id, Incident.status == "open")
+            .first()
+        )
+        if open_incident:
+            open_incident.status = "resolved"
+            open_incident.resolved_at = datetime.now(timezone.utc)
+        return
+
+    recent_checks = (
+        db.query(Check)
+        .filter(Check.endpoint_id == endpoint_id)
+        .order_by(desc(Check.checked_at))
+        .limit(3)
+        .all()
+    )
+
+    if len(recent_checks) < 3 or any(check.success for check in recent_checks):
+        return
+
+    open_incident = (
+        db.query(Incident)
+        .filter(Incident.endpoint_id == endpoint_id, Incident.status == "open")
+        .first()
+    )
+
+    if open_incident:
+        open_incident.failure_count += 1
+        open_incident.updated_at = datetime.now(timezone.utc)
+    else:
+        incident = Incident(
+            endpoint_id=endpoint_id,
+            title="Endpoint failure detected",
+            status="open",
+            failure_count=3,
+        )
+        db.add(incident)
 
 
 @router.post("/{endpoint_id}/checks", response_model=CheckResponse, status_code=status.HTTP_201_CREATED)
@@ -44,6 +87,10 @@ def trigger_check(endpoint_id: int, db: Session = Depends(get_db)):
     db.add(check)
     db.commit()
     db.refresh(check)
+
+    _evaluate_incidents(db, endpoint.id, success)
+    db.commit()
+
     return check
 
 

@@ -40,3 +40,16 @@ class CheckResponse(BaseModel):
     success: bool
     error_message: str | None
     checked_at: datetime
+
+
+class IncidentResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    endpoint_id: int
+    title: str
+    status: str
+    failure_count: int
+    created_at: datetime
+    updated_at: datetime
+    resolved_at: datetime | None
