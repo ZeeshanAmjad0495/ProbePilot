@@ -26,3 +26,17 @@ class EndpointResponse(BaseModel):
     expected_status_code: int
     timeout_seconds: float
     created_at: datetime
+
+
+class CheckResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    endpoint_id: int
+    url: str
+    expected_status_code: int
+    actual_status_code: int | None
+    response_time_ms: int | None
+    success: bool
+    error_message: str | None
+    checked_at: datetime
