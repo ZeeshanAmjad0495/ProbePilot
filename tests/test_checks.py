@@ -1,3 +1,4 @@
+import time
 from unittest.mock import MagicMock, patch
 
 import httpx
@@ -124,5 +125,65 @@ def test_check_connect_error(mock_get):
 
 def test_check_endpoint_not_found():
     response = client.post("/endpoints/999/checks")
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Endpoint not found"
+
+
+def test_list_checks_empty():
+    endpoint = _create_endpoint()
+    response = client.get(f"/endpoints/{endpoint['id']}/checks")
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_list_checks_ordered_and_filtered_by_endpoint():
+    endpoint_a = _create_endpoint()
+    endpoint_b = client.post(
+        "/endpoints",
+        json={
+            "name": "Other API",
+            "url": "https://other.example.com/api",
+            "expected_status_code": 200,
+            "timeout_seconds": 3.0,
+        },
+    )
+    assert endpoint_b.status_code == 201
+    endpoint_b = endpoint_b.json()
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+
+    # Trigger checks for endpoint A with small delays for distinct timestamps
+    with patch("checks.httpx.Client.get", return_value=mock_response):
+        response_a1 = client.post(f"/endpoints/{endpoint_a['id']}/checks")
+        assert response_a1.status_code == 201
+    time.sleep(0.01)
+    with patch("checks.httpx.Client.get", return_value=mock_response):
+        response_a2 = client.post(f"/endpoints/{endpoint_a['id']}/checks")
+        assert response_a2.status_code == 201
+    time.sleep(0.01)
+    with patch("checks.httpx.Client.get", return_value=mock_response):
+        response_a3 = client.post(f"/endpoints/{endpoint_a['id']}/checks")
+        assert response_a3.status_code == 201
+
+    # Trigger a check for endpoint B
+    with patch("checks.httpx.Client.get", return_value=mock_response):
+        response_b1 = client.post(f"/endpoints/{endpoint_b['id']}/checks")
+        assert response_b1.status_code == 201
+
+    response = client.get(f"/endpoints/{endpoint_a['id']}/checks")
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 3
+
+    checked_ats = [item["checked_at"] for item in body]
+    assert checked_ats == sorted(checked_ats, reverse=True)
+
+    for item in body:
+        assert item["endpoint_id"] == endpoint_a["id"]
+
+
+def test_list_checks_endpoint_not_found():
+    response = client.get("/endpoints/999/checks")
     assert response.status_code == 404
     assert response.json()["detail"] == "Endpoint not found"
