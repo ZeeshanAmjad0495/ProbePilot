@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from database import get_db
 from models import Endpoint
-from schemas import EndpointCreate, EndpointResponse, EndpointUpdate
+from schemas import EndpointCreate, EndpointResponse, EndpointUpdate, EndpointsPage, PageMeta
 
 router = APIRouter(prefix="/endpoints", tags=["endpoints"])
 
@@ -22,9 +22,18 @@ def create_endpoint(data: EndpointCreate, db: Session = Depends(get_db)):
     return endpoint
 
 
-@router.get("", response_model=list[EndpointResponse])
-def list_endpoints(db: Session = Depends(get_db)):
-    return db.query(Endpoint).all()
+@router.get("", response_model=EndpointsPage)
+def list_endpoints(
+    db: Session = Depends(get_db),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+):
+    total = db.query(Endpoint).count()
+    rows = db.query(Endpoint).offset(offset).limit(limit).all()
+    return EndpointsPage(
+        items=[EndpointResponse.model_validate(r) for r in rows],
+        meta=PageMeta(total=total, limit=limit, offset=offset),
+    )
 
 
 @router.get("/{endpoint_id}", response_model=EndpointResponse)

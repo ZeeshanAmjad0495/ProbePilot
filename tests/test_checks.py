@@ -104,7 +104,11 @@ def test_list_checks_empty():
     endpoint = _create_endpoint()
     response = client.get(f"/endpoints/{endpoint['id']}/checks")
     assert response.status_code == 200
-    assert response.json() == []
+    body = response.json()
+    assert body["items"] == []
+    assert body["meta"]["total"] == 0
+    assert body["meta"]["limit"] == 50
+    assert body["meta"]["offset"] == 0
 
 
 def test_list_checks_ordered_and_filtered_by_endpoint():
@@ -145,12 +149,13 @@ def test_list_checks_ordered_and_filtered_by_endpoint():
     response = client.get(f"/endpoints/{endpoint_a['id']}/checks")
     assert response.status_code == 200
     body = response.json()
-    assert len(body) == 3
+    assert len(body["items"]) == 3
+    assert body["meta"]["total"] == 3
 
-    checked_ats = [item["checked_at"] for item in body]
+    checked_ats = [item["checked_at"] for item in body["items"]]
     assert checked_ats == sorted(checked_ats, reverse=True)
 
-    for item in body:
+    for item in body["items"]:
         assert item["endpoint_id"] == endpoint_a["id"]
 
 
@@ -191,3 +196,70 @@ def test_evaluate_incidents_catches_integrity_error():
 
     mock_db.rollback.assert_called_once()
     assert existing_incident.failure_count == 4
+
+
+def test_list_checks_pagination_default_limit():
+    endpoint = _create_endpoint()
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+
+    for _ in range(55):
+        with patch("checks.httpx.Client.get", return_value=mock_response):
+            resp = client.post(f"/endpoints/{endpoint['id']}/checks")
+            assert resp.status_code == 201
+
+    response = client.get(f"/endpoints/{endpoint['id']}/checks")
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["items"]) == 50
+    assert body["meta"]["total"] == 55
+    assert body["meta"]["limit"] == 50
+    assert body["meta"]["offset"] == 0
+
+
+def test_list_checks_pagination_explicit_limit_offset():
+    endpoint = _create_endpoint()
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+
+    for _ in range(5):
+        with patch("checks.httpx.Client.get", return_value=mock_response):
+            resp = client.post(f"/endpoints/{endpoint['id']}/checks")
+            assert resp.status_code == 201
+
+    response = client.get(f"/endpoints/{endpoint['id']}/checks?limit=2&offset=1")
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["items"]) == 2
+    assert body["meta"]["total"] == 5
+    assert body["meta"]["limit"] == 2
+    assert body["meta"]["offset"] == 1
+
+
+def test_list_checks_pagination_limit_zero_returns_422():
+    endpoint = _create_endpoint()
+    response = client.get(f"/endpoints/{endpoint['id']}/checks?limit=0")
+    assert response.status_code == 422
+
+
+def test_list_checks_pagination_limit_over_max_returns_422():
+    endpoint = _create_endpoint()
+    response = client.get(f"/endpoints/{endpoint['id']}/checks?limit=300")
+    assert response.status_code == 422
+
+
+def test_list_checks_pagination_offset_past_end():
+    endpoint = _create_endpoint()
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+
+    with patch("checks.httpx.Client.get", return_value=mock_response):
+        resp = client.post(f"/endpoints/{endpoint['id']}/checks")
+        assert resp.status_code == 201
+
+    response = client.get(f"/endpoints/{endpoint['id']}/checks?offset=10")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["items"] == []
+    assert body["meta"]["total"] == 1
+    assert body["meta"]["offset"] == 10

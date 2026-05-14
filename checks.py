@@ -1,17 +1,19 @@
+import logging
 import time
 from datetime import datetime, timezone
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import desc
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from database import get_db
 from models import Check, Endpoint, Incident
-from schemas import CheckResponse
+from schemas import CheckResponse, ChecksPage, PageMeta
 
 router = APIRouter(prefix="/endpoints", tags=["checks"])
+log = logging.getLogger("probepilot.checks")
 
 
 def _evaluate_incidents(db: Session, endpoint_id: int, success: bool) -> None:
@@ -24,6 +26,10 @@ def _evaluate_incidents(db: Session, endpoint_id: int, success: bool) -> None:
         if open_incident:
             open_incident.status = "resolved"
             open_incident.resolved_at = datetime.now(timezone.utc)
+            log.info(
+                "incident_resolved_auto",
+                extra={"endpoint_id": endpoint_id},
+            )
         return
 
     recent_checks = (
@@ -46,6 +52,10 @@ def _evaluate_incidents(db: Session, endpoint_id: int, success: bool) -> None:
     if open_incident:
         open_incident.failure_count += 1
         open_incident.updated_at = datetime.now(timezone.utc)
+        log.info(
+            "incident_failure_count_incremented",
+            extra={"endpoint_id": endpoint_id, "failure_count": open_incident.failure_count},
+        )
     else:
         incident = Incident(
             endpoint_id=endpoint_id,
@@ -66,6 +76,15 @@ def _evaluate_incidents(db: Session, endpoint_id: int, success: bool) -> None:
             if open_incident:
                 open_incident.failure_count += 1
                 open_incident.updated_at = datetime.now(timezone.utc)
+                log.info(
+                    "incident_failure_count_incremented",
+                    extra={"endpoint_id": endpoint_id, "failure_count": open_incident.failure_count},
+                )
+        else:
+            log.info(
+                "incident_opened",
+                extra={"endpoint_id": endpoint_id, "failure_count": 3},
+            )
 
 
 @router.post("/{endpoint_id}/checks", response_model=CheckResponse, status_code=status.HTTP_201_CREATED)
@@ -101,22 +120,42 @@ def trigger_check(endpoint_id: int, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(check)
 
+    log.info(
+        "check_executed",
+        extra={
+            "endpoint_id": endpoint.id,
+            "success": success,
+            "response_time_ms": elapsed_ms,
+        },
+    )
+
     _evaluate_incidents(db, endpoint.id, success)
     db.commit()
 
     return check
 
 
-@router.get("/{endpoint_id}/checks", response_model=list[CheckResponse])
-def list_checks(endpoint_id: int, db: Session = Depends(get_db)):
+@router.get("/{endpoint_id}/checks", response_model=ChecksPage)
+def list_checks(
+    endpoint_id: int,
+    db: Session = Depends(get_db),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+):
     endpoint = db.query(Endpoint).filter(Endpoint.id == endpoint_id).first()
     if endpoint is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Endpoint not found")
 
+    total = db.query(Check).filter(Check.endpoint_id == endpoint_id).count()
     checks = (
         db.query(Check)
         .filter(Check.endpoint_id == endpoint_id)
         .order_by(desc(Check.checked_at))
+        .offset(offset)
+        .limit(limit)
         .all()
     )
-    return checks
+    return ChecksPage(
+        items=[CheckResponse.model_validate(c) for c in checks],
+        meta=PageMeta(total=total, limit=limit, offset=offset),
+    )

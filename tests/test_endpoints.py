@@ -49,9 +49,12 @@ def test_list_endpoints():
     response = client.get("/endpoints")
     assert response.status_code == 200
     body = response.json()
-    assert len(body) == 2
-    assert body[0]["name"] == "First"
-    assert body[1]["name"] == "Second"
+    assert len(body["items"]) == 2
+    assert body["items"][0]["name"] == "First"
+    assert body["items"][1]["name"] == "Second"
+    assert body["meta"]["total"] == 2
+    assert body["meta"]["limit"] == 50
+    assert body["meta"]["offset"] == 0
 
 
 def test_get_endpoint():
@@ -134,6 +137,63 @@ def test_create_endpoint_invalid_negative_timeout():
     assert response.status_code == 422
 
 
+def test_list_endpoints_pagination_default_limit():
+    for i in range(55):
+        client.post(
+            "/endpoints",
+            json={"name": f"Endpoint {i}", "url": f"https://example{i}.com"},
+        )
+
+    response = client.get("/endpoints")
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["items"]) == 50
+    assert body["meta"]["total"] == 55
+    assert body["meta"]["limit"] == 50
+    assert body["meta"]["offset"] == 0
+
+
+def test_list_endpoints_pagination_explicit_limit_offset():
+    for i in range(5):
+        client.post(
+            "/endpoints",
+            json={"name": f"Endpoint {i}", "url": f"https://example{i}.com"},
+        )
+
+    response = client.get("/endpoints?limit=2&offset=1")
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["items"]) == 2
+    assert body["items"][0]["name"] == "Endpoint 1"
+    assert body["meta"]["total"] == 5
+    assert body["meta"]["limit"] == 2
+    assert body["meta"]["offset"] == 1
+
+
+def test_list_endpoints_pagination_limit_zero_returns_422():
+    response = client.get("/endpoints?limit=0")
+    assert response.status_code == 422
+
+
+def test_list_endpoints_pagination_limit_over_max_returns_422():
+    response = client.get("/endpoints?limit=300")
+    assert response.status_code == 422
+
+
+def test_list_endpoints_pagination_offset_past_end():
+    client.post(
+        "/endpoints",
+        json={"name": "Only", "url": "https://only.example.com"},
+    )
+
+    response = client.get("/endpoints?offset=10")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["items"] == []
+    assert body["meta"]["total"] == 1
+    assert body["meta"]["offset"] == 10
+
+
 def test_persistence_across_requests():
     create_response = client.post(
         "/endpoints",
@@ -149,7 +209,7 @@ def test_persistence_across_requests():
     # Verify via list
     list_response = client.get("/endpoints")
     assert list_response.status_code == 200
-    assert len(list_response.json()) == 1
+    assert len(list_response.json()["items"]) == 1
 
     # Verify via update
     update_response = client.put(
