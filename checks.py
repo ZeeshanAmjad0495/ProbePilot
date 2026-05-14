@@ -13,6 +13,11 @@ from models import Check, Endpoint, Incident
 from schemas import CheckResponse, ChecksPage, PageMeta
 
 router = APIRouter(prefix="/endpoints", tags=["checks"])
+
+
+def _execute_http_request(client, method, url, *, headers=None, content=None):
+    """Thin seam so tests can mock HTTP without disrupting TestClient's own httpx use."""
+    return client.request(method, url, headers=headers, content=content)
 log = logging.getLogger("probepilot.checks")
 
 
@@ -93,10 +98,16 @@ def trigger_check(endpoint_id: int, db: Session = Depends(get_db)):
     if endpoint is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Endpoint not found")
 
+    method = endpoint.method
+    headers = endpoint.request_headers or None
+    body = endpoint.request_body
+
     start = time.perf_counter()
     try:
         with httpx.Client(timeout=endpoint.timeout_seconds) as client:
-            response = client.get(endpoint.url)
+            response = _execute_http_request(client, 
+                method, endpoint.url, headers=headers, content=body
+            )
         elapsed_ms = int((time.perf_counter() - start) * 1000)
         actual_status_code = response.status_code
         success = actual_status_code == endpoint.expected_status_code
@@ -141,16 +152,25 @@ def list_checks(
     db: Session = Depends(get_db),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
+    success: bool | None = Query(None),
+    since: datetime | None = Query(None),
+    until: datetime | None = Query(None),
 ):
     endpoint = db.query(Endpoint).filter(Endpoint.id == endpoint_id).first()
     if endpoint is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Endpoint not found")
 
-    total = db.query(Check).filter(Check.endpoint_id == endpoint_id).count()
+    query = db.query(Check).filter(Check.endpoint_id == endpoint_id)
+    if success is not None:
+        query = query.filter(Check.success == success)
+    if since is not None:
+        query = query.filter(Check.checked_at >= since)
+    if until is not None:
+        query = query.filter(Check.checked_at <= until)
+
+    total = query.count()
     checks = (
-        db.query(Check)
-        .filter(Check.endpoint_id == endpoint_id)
-        .order_by(desc(Check.checked_at))
+        query.order_by(desc(Check.checked_at))
         .offset(offset)
         .limit(limit)
         .all()

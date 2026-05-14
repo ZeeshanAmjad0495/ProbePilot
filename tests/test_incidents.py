@@ -33,10 +33,17 @@ def _mock_success():
     return mock
 
 
+def _mock_client_with_response(response):
+    mock_client = MagicMock()
+    mock_client.request.return_value = response
+    return mock_client
+
+
 def test_three_consecutive_failures_create_incident():
     endpoint = _create_endpoint()
 
-    with patch("checks.httpx.Client.get", return_value=_mock_failure()):
+    with patch("checks.httpx.Client") as mock_class:
+        mock_class.return_value.__enter__.return_value = _mock_client_with_response(_mock_failure())
         for _ in range(3):
             response = client.post(f"/endpoints/{endpoint['id']}/checks")
             assert response.status_code == 201
@@ -57,7 +64,8 @@ def test_three_consecutive_failures_create_incident():
 def test_fourth_failure_increments_failure_count_no_duplicate():
     endpoint = _create_endpoint()
 
-    with patch("checks.httpx.Client.get", return_value=_mock_failure()):
+    with patch("checks.httpx.Client") as mock_class:
+        mock_class.return_value.__enter__.return_value = _mock_client_with_response(_mock_failure())
         for _ in range(4):
             response = client.post(f"/endpoints/{endpoint['id']}/checks")
             assert response.status_code == 201
@@ -75,12 +83,14 @@ def test_fourth_failure_increments_failure_count_no_duplicate():
 def test_successful_check_resolves_open_incident():
     endpoint = _create_endpoint()
 
-    with patch("checks.httpx.Client.get", return_value=_mock_failure()):
+    with patch("checks.httpx.Client") as mock_class:
+        mock_class.return_value.__enter__.return_value = _mock_client_with_response(_mock_failure())
         for _ in range(3):
             response = client.post(f"/endpoints/{endpoint['id']}/checks")
             assert response.status_code == 201
 
-    with patch("checks.httpx.Client.get", return_value=_mock_success()):
+    with patch("checks.httpx.Client") as mock_class:
+        mock_class.return_value.__enter__.return_value = _mock_client_with_response(_mock_success())
         response = client.post(f"/endpoints/{endpoint['id']}/checks")
         assert response.status_code == 201
 
@@ -97,15 +107,18 @@ def test_successful_check_resolves_open_incident():
 def test_non_consecutive_failures_do_not_create_incident():
     endpoint = _create_endpoint()
 
-    with patch("checks.httpx.Client.get", return_value=_mock_failure()):
+    with patch("checks.httpx.Client") as mock_class:
+        mock_class.return_value.__enter__.return_value = _mock_client_with_response(_mock_failure())
         response = client.post(f"/endpoints/{endpoint['id']}/checks")
         assert response.status_code == 201
 
-    with patch("checks.httpx.Client.get", return_value=_mock_success()):
+    with patch("checks.httpx.Client") as mock_class:
+        mock_class.return_value.__enter__.return_value = _mock_client_with_response(_mock_success())
         response = client.post(f"/endpoints/{endpoint['id']}/checks")
         assert response.status_code == 201
 
-    with patch("checks.httpx.Client.get", return_value=_mock_failure()):
+    with patch("checks.httpx.Client") as mock_class:
+        mock_class.return_value.__enter__.return_value = _mock_client_with_response(_mock_failure())
         response = client.post(f"/endpoints/{endpoint['id']}/checks")
         assert response.status_code == 201
 
@@ -126,7 +139,8 @@ def test_list_incidents_endpoint_not_found():
 def test_get_incident_by_id():
     endpoint = _create_endpoint()
 
-    with patch("checks.httpx.Client.get", return_value=_mock_failure()):
+    with patch("checks.httpx.Client") as mock_class:
+        mock_class.return_value.__enter__.return_value = _mock_client_with_response(_mock_failure())
         for _ in range(3):
             response = client.post(f"/endpoints/{endpoint['id']}/checks")
             assert response.status_code == 201
@@ -150,7 +164,8 @@ def test_get_incident_not_found():
 def test_list_incidents_pagination_default_limit():
     endpoint = _create_endpoint()
 
-    with patch("checks.httpx.Client.get", return_value=_mock_failure()):
+    with patch("checks.httpx.Client") as mock_class:
+        mock_class.return_value.__enter__.return_value = _mock_client_with_response(_mock_failure())
         for _ in range(55):
             resp = client.post(f"/endpoints/{endpoint['id']}/checks")
             assert resp.status_code == 201
@@ -167,7 +182,8 @@ def test_list_incidents_pagination_default_limit():
 def test_list_incidents_pagination_explicit_limit_offset():
     endpoint = _create_endpoint()
 
-    with patch("checks.httpx.Client.get", return_value=_mock_failure()):
+    with patch("checks.httpx.Client") as mock_class:
+        mock_class.return_value.__enter__.return_value = _mock_client_with_response(_mock_failure())
         for _ in range(3):
             resp = client.post(f"/endpoints/{endpoint['id']}/checks")
             assert resp.status_code == 201
@@ -196,7 +212,8 @@ def test_list_incidents_pagination_limit_over_max_returns_422():
 def test_list_incidents_pagination_offset_past_end():
     endpoint = _create_endpoint()
 
-    with patch("checks.httpx.Client.get", return_value=_mock_failure()):
+    with patch("checks.httpx.Client") as mock_class:
+        mock_class.return_value.__enter__.return_value = _mock_client_with_response(_mock_failure())
         for _ in range(3):
             resp = client.post(f"/endpoints/{endpoint['id']}/checks")
             assert resp.status_code == 201

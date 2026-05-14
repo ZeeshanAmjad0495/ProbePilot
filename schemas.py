@@ -1,6 +1,9 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl
+
+HttpMethod = Literal["GET", "POST", "HEAD", "PUT", "DELETE", "PATCH"]
 
 
 class EndpointCreate(BaseModel):
@@ -8,6 +11,9 @@ class EndpointCreate(BaseModel):
     url: HttpUrl
     expected_status_code: int = Field(default=200)
     timeout_seconds: float = Field(default=5.0, gt=0)
+    method: HttpMethod = Field(default="GET")
+    request_headers: dict[str, str] | None = Field(default=None)
+    request_body: str | None = Field(default=None)
 
 
 class EndpointUpdate(BaseModel):
@@ -15,6 +21,9 @@ class EndpointUpdate(BaseModel):
     url: HttpUrl | None = Field(default=None)
     expected_status_code: int | None = Field(default=None)
     timeout_seconds: float | None = Field(default=None, gt=0)
+    method: HttpMethod | None = Field(default=None)
+    request_headers: dict[str, str] | None = Field(default=None)
+    request_body: str | None = Field(default=None)
 
 
 class EndpointResponse(BaseModel):
@@ -25,6 +34,9 @@ class EndpointResponse(BaseModel):
     url: str
     expected_status_code: int
     timeout_seconds: float
+    method: str
+    request_headers: dict | None
+    request_body: str | None
     created_at: datetime
 
 
@@ -74,3 +86,10 @@ class ChecksPage(BaseModel):
 class IncidentsPage(BaseModel):
     items: list[IncidentResponse]
     meta: PageMeta
+
+
+class HealthResponse(BaseModel):
+    status: Literal["healthy", "degraded"]
+    version: str
+    db: Literal["ok", "error"]
+    error: str | None
