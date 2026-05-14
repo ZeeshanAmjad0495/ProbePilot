@@ -6,6 +6,9 @@ import database
 from endpoints import router as endpoints_router
 from checks import router as checks_router
 from incidents import router as incidents_router
+from logging_config import setup_logging
+
+setup_logging()
 
 
 @asynccontextmanager

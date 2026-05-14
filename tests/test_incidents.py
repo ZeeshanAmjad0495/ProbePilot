@@ -43,8 +43,10 @@ def test_three_consecutive_failures_create_incident():
 
     incidents_response = client.get(f"/endpoints/{endpoint['id']}/incidents")
     assert incidents_response.status_code == 200
-    incidents = incidents_response.json()
+    body = incidents_response.json()
+    incidents = body["items"]
     assert len(incidents) == 1
+    assert body["meta"]["total"] == 1
     assert incidents[0]["status"] == "open"
     assert incidents[0]["failure_count"] == 3
     assert incidents[0]["endpoint_id"] == endpoint["id"]
@@ -62,8 +64,10 @@ def test_fourth_failure_increments_failure_count_no_duplicate():
 
     incidents_response = client.get(f"/endpoints/{endpoint['id']}/incidents")
     assert incidents_response.status_code == 200
-    incidents = incidents_response.json()
+    body = incidents_response.json()
+    incidents = body["items"]
     assert len(incidents) == 1
+    assert body["meta"]["total"] == 1
     assert incidents[0]["status"] == "open"
     assert incidents[0]["failure_count"] == 4
 
@@ -82,8 +86,10 @@ def test_successful_check_resolves_open_incident():
 
     incidents_response = client.get(f"/endpoints/{endpoint['id']}/incidents")
     assert incidents_response.status_code == 200
-    incidents = incidents_response.json()
+    body = incidents_response.json()
+    incidents = body["items"]
     assert len(incidents) == 1
+    assert body["meta"]["total"] == 1
     assert incidents[0]["status"] == "resolved"
     assert incidents[0]["resolved_at"] is not None
 
@@ -105,8 +111,10 @@ def test_non_consecutive_failures_do_not_create_incident():
 
     incidents_response = client.get(f"/endpoints/{endpoint['id']}/incidents")
     assert incidents_response.status_code == 200
-    incidents = incidents_response.json()
+    body = incidents_response.json()
+    incidents = body["items"]
     assert len(incidents) == 0
+    assert body["meta"]["total"] == 0
 
 
 def test_list_incidents_endpoint_not_found():
@@ -124,7 +132,7 @@ def test_get_incident_by_id():
             assert response.status_code == 201
 
     incidents_response = client.get(f"/endpoints/{endpoint['id']}/incidents")
-    incident_id = incidents_response.json()[0]["id"]
+    incident_id = incidents_response.json()["items"][0]["id"]
 
     response = client.get(f"/incidents/{incident_id}")
     assert response.status_code == 200
@@ -137,3 +145,65 @@ def test_get_incident_not_found():
     response = client.get("/incidents/999")
     assert response.status_code == 404
     assert response.json()["detail"] == "Incident not found"
+
+
+def test_list_incidents_pagination_default_limit():
+    endpoint = _create_endpoint()
+
+    with patch("checks.httpx.Client.get", return_value=_mock_failure()):
+        for _ in range(55):
+            resp = client.post(f"/endpoints/{endpoint['id']}/checks")
+            assert resp.status_code == 201
+
+    response = client.get(f"/endpoints/{endpoint['id']}/incidents")
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["items"]) == 1  # Only one open incident exists per endpoint
+    assert body["meta"]["total"] == 1
+    assert body["meta"]["limit"] == 50
+    assert body["meta"]["offset"] == 0
+
+
+def test_list_incidents_pagination_explicit_limit_offset():
+    endpoint = _create_endpoint()
+
+    with patch("checks.httpx.Client.get", return_value=_mock_failure()):
+        for _ in range(3):
+            resp = client.post(f"/endpoints/{endpoint['id']}/checks")
+            assert resp.status_code == 201
+
+    response = client.get(f"/endpoints/{endpoint['id']}/incidents?limit=1&offset=0")
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["items"]) == 1
+    assert body["meta"]["total"] == 1
+    assert body["meta"]["limit"] == 1
+    assert body["meta"]["offset"] == 0
+
+
+def test_list_incidents_pagination_limit_zero_returns_422():
+    endpoint = _create_endpoint()
+    response = client.get(f"/endpoints/{endpoint['id']}/incidents?limit=0")
+    assert response.status_code == 422
+
+
+def test_list_incidents_pagination_limit_over_max_returns_422():
+    endpoint = _create_endpoint()
+    response = client.get(f"/endpoints/{endpoint['id']}/incidents?limit=300")
+    assert response.status_code == 422
+
+
+def test_list_incidents_pagination_offset_past_end():
+    endpoint = _create_endpoint()
+
+    with patch("checks.httpx.Client.get", return_value=_mock_failure()):
+        for _ in range(3):
+            resp = client.post(f"/endpoints/{endpoint['id']}/checks")
+            assert resp.status_code == 201
+
+    response = client.get(f"/endpoints/{endpoint['id']}/incidents?offset=10")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["items"] == []
+    assert body["meta"]["total"] == 1
+    assert body["meta"]["offset"] == 10

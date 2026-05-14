@@ -53,3 +53,24 @@ class IncidentResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     resolved_at: datetime | None
+
+
+class PageMeta(BaseModel):
+    total: int
+    limit: int
+    offset: int
+
+
+class EndpointsPage(BaseModel):
+    items: list[EndpointResponse]
+    meta: PageMeta
+
+
+class ChecksPage(BaseModel):
+    items: list[CheckResponse]
+    meta: PageMeta
+
+
+class IncidentsPage(BaseModel):
+    items: list[IncidentResponse]
+    meta: PageMeta
