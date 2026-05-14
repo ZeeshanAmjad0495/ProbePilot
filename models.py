@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, String, func
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, JSON, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from database import Base
@@ -14,6 +14,9 @@ class Endpoint(Base):
     url: Mapped[str] = mapped_column(String, nullable=False)
     expected_status_code: Mapped[int] = mapped_column(Integer, default=200)
     timeout_seconds: Mapped[float] = mapped_column(Float, default=5.0)
+    method: Mapped[str] = mapped_column(String, nullable=False, server_default="GET")
+    request_headers: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    request_body: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

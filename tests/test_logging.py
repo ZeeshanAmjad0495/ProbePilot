@@ -38,7 +38,7 @@ def _find_record(records, message):
 def test_log_check_executed_failure(caplog):
     endpoint = _create_endpoint()
 
-    with patch("checks.httpx.Client.get", return_value=_mock_failure()):
+    with patch("checks._execute_http_request", return_value=_mock_failure()):
         response = client.post(f"/endpoints/{endpoint['id']}/checks")
         assert response.status_code == 201
 
@@ -52,7 +52,7 @@ def test_log_check_executed_failure(caplog):
 def test_log_incident_opened_after_three_failures(caplog):
     endpoint = _create_endpoint()
 
-    with patch("checks.httpx.Client.get", return_value=_mock_failure()):
+    with patch("checks._execute_http_request", return_value=_mock_failure()):
         for _ in range(3):
             response = client.post(f"/endpoints/{endpoint['id']}/checks")
             assert response.status_code == 201
@@ -66,7 +66,7 @@ def test_log_incident_opened_after_three_failures(caplog):
 def test_log_incident_resolved_manual(caplog):
     endpoint = _create_endpoint()
 
-    with patch("checks.httpx.Client.get", return_value=_mock_failure()):
+    with patch("checks._execute_http_request", return_value=_mock_failure()):
         for _ in range(3):
             response = client.post(f"/endpoints/{endpoint['id']}/checks")
             assert response.status_code == 201

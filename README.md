@@ -184,6 +184,22 @@ ProbePilot is a local-first endpoint monitoring tool built with FastAPI + SQLAlc
 
 - `PROBEPILOT_DATABASE_URL` — SQLAlchemy database URL. Defaults to `sqlite:///./probepilot.db`. Any SQLAlchemy-compatible URL works (for example, `postgresql+psycopg://...` if you add Postgres dependencies later).
 
+## Migrations
+
+ProbePilot uses Alembic for schema migrations. On startup, the application automatically applies pending migrations.
+
+Apply migrations manually:
+
+```bash
+uv run alembic upgrade head
+```
+
+Generate a new migration after changing models:
+
+```bash
+uv run alembic revision --autogenerate -m "describe your change"
+```
+
 ## Run tests
 
 ```bash

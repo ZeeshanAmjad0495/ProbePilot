@@ -34,6 +34,39 @@ def test_create_endpoint_defaults():
     body = response.json()
     assert body["expected_status_code"] == 200
     assert body["timeout_seconds"] == 5.0
+    assert body["method"] == "GET"
+    assert body["request_headers"] is None
+    assert body["request_body"] is None
+
+
+def test_create_endpoint_with_custom_http_fields():
+    response = client.post(
+        "/endpoints",
+        json={
+            "name": "Test API",
+            "url": "https://example.com/api",
+            "method": "POST",
+            "request_headers": {"Content-Type": "application/json"},
+            "request_body": '{"key": "value"}',
+        },
+    )
+    assert response.status_code == 201
+    body = response.json()
+    assert body["method"] == "POST"
+    assert body["request_headers"] == {"Content-Type": "application/json"}
+    assert body["request_body"] == '{"key": "value"}'
+
+
+def test_create_endpoint_invalid_method():
+    response = client.post(
+        "/endpoints",
+        json={
+            "name": "Test API",
+            "url": "https://example.com/api",
+            "method": "INVALID",
+        },
+    )
+    assert response.status_code == 422
 
 
 def test_list_endpoints():
@@ -99,6 +132,28 @@ def test_update_endpoint():
     assert body["url"] == "https://new.example.com/"
     assert body["expected_status_code"] == 201
     assert body["timeout_seconds"] == 10.0
+
+
+def test_update_endpoint_custom_http_fields():
+    create_response = client.post(
+        "/endpoints",
+        json={"name": "Old Name", "url": "https://old.example.com"},
+    )
+    endpoint_id = create_response.json()["id"]
+
+    response = client.put(
+        f"/endpoints/{endpoint_id}",
+        json={
+            "method": "PATCH",
+            "request_headers": {"X-Custom": "header"},
+            "request_body": "patch body",
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["method"] == "PATCH"
+    assert body["request_headers"] == {"X-Custom": "header"}
+    assert body["request_body"] == "patch body"
 
 
 def test_update_endpoint_not_found():
@@ -192,6 +247,70 @@ def test_list_endpoints_pagination_offset_past_end():
     assert body["items"] == []
     assert body["meta"]["total"] == 1
     assert body["meta"]["offset"] == 10
+
+
+def test_list_endpoints_search_by_name():
+    client.post("/endpoints", json={"name": "Alpha Service", "url": "https://alpha.com"})
+    client.post("/endpoints", json={"name": "Beta Service", "url": "https://beta.com"})
+
+    response = client.get("/endpoints?q=Alpha")
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["items"]) == 1
+    assert body["items"][0]["name"] == "Alpha Service"
+    assert body["meta"]["total"] == 1
+
+
+def test_list_endpoints_search_by_url():
+    client.post("/endpoints", json={"name": "Alpha", "url": "https://alpha.example.com"})
+    client.post("/endpoints", json={"name": "Beta", "url": "https://beta.other.com"})
+
+    response = client.get("/endpoints?q=example")
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["items"]) == 1
+    assert body["items"][0]["url"] == "https://alpha.example.com/"
+    assert body["meta"]["total"] == 1
+
+
+def test_list_endpoints_search_case_insensitive():
+    client.post("/endpoints", json={"name": "Alpha Service", "url": "https://alpha.com"})
+
+    response = client.get("/endpoints?q=alpha")
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["items"]) == 1
+    assert body["items"][0]["name"] == "Alpha Service"
+
+
+def test_list_endpoints_search_no_matches():
+    client.post("/endpoints", json={"name": "Alpha", "url": "https://alpha.com"})
+
+    response = client.get("/endpoints?q=nonexistent")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["items"] == []
+    assert body["meta"]["total"] == 0
+
+
+def test_list_endpoints_search_with_pagination():
+    client.post("/endpoints", json={"name": "Alpha One", "url": "https://a1.com"})
+    client.post("/endpoints", json={"name": "Alpha Two", "url": "https://a2.com"})
+    client.post("/endpoints", json={"name": "Alpha Three", "url": "https://a3.com"})
+    client.post("/endpoints", json={"name": "Beta", "url": "https://beta.com"})
+
+    response = client.get("/endpoints?q=Alpha&limit=2&offset=1")
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["items"]) == 2
+    assert body["meta"]["total"] == 3
+    assert body["meta"]["limit"] == 2
+    assert body["meta"]["offset"] == 1
+
+
+def test_list_endpoints_search_empty_q_returns_422():
+    response = client.get("/endpoints?q=")
+    assert response.status_code == 422
 
 
 def test_persistence_across_requests():

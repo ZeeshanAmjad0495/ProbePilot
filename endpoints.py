@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -15,6 +16,9 @@ def create_endpoint(data: EndpointCreate, db: Session = Depends(get_db)):
         url=str(data.url),
         expected_status_code=data.expected_status_code,
         timeout_seconds=data.timeout_seconds,
+        method=data.method,
+        request_headers=data.request_headers,
+        request_body=data.request_body,
     )
     db.add(endpoint)
     db.commit()
@@ -27,9 +31,18 @@ def list_endpoints(
     db: Session = Depends(get_db),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
+    q: str | None = Query(None, min_length=1),
 ):
-    total = db.query(Endpoint).count()
-    rows = db.query(Endpoint).offset(offset).limit(limit).all()
+    query = db.query(Endpoint)
+    if q:
+        query = query.filter(
+            or_(
+                Endpoint.name.ilike(f"%{q}%"),
+                Endpoint.url.ilike(f"%{q}%"),
+            )
+        )
+    total = query.count()
+    rows = query.offset(offset).limit(limit).all()
     return EndpointsPage(
         items=[EndpointResponse.model_validate(r) for r in rows],
         meta=PageMeta(total=total, limit=limit, offset=offset),
@@ -58,6 +71,12 @@ def update_endpoint(endpoint_id: int, data: EndpointUpdate, db: Session = Depend
         endpoint.expected_status_code = data.expected_status_code
     if data.timeout_seconds is not None:
         endpoint.timeout_seconds = data.timeout_seconds
+    if data.method is not None:
+        endpoint.method = data.method
+    if data.request_headers is not None:
+        endpoint.request_headers = data.request_headers
+    if data.request_body is not None:
+        endpoint.request_body = data.request_body
 
     db.commit()
     db.refresh(endpoint)
