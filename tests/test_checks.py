@@ -566,3 +566,45 @@ def test_list_checks_filter_with_pagination(db_session):
     assert len(body["items"]) == 2
     assert body["meta"]["total"] == 4
     assert body["meta"]["limit"] == 2
+
+
+def test_check_disabled_endpoint_returns_409():
+    create_resp = client.post(
+        "/endpoints",
+        json={"name": "Disabled API", "url": "https://example.com/api"},
+    )
+    assert create_resp.status_code == 201
+    endpoint = create_resp.json()
+
+    patch_resp = client.patch(
+        f"/endpoints/{endpoint['id']}",
+        json={"enabled": False},
+    )
+    assert patch_resp.status_code == 200
+
+    response = client.post(f"/endpoints/{endpoint['id']}/checks")
+    assert response.status_code == 409
+    body = response.json()
+    assert body["detail"]["code"] == "endpoint_disabled"
+    assert "disabled" in body["detail"]["detail"].lower()
+
+
+@patch("checks._execute_http_request")
+def test_check_enabled_endpoint_still_works(mock_execute):
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_execute.return_value = mock_response
+
+    create_resp = client.post(
+        "/endpoints",
+        json={"name": "Enabled API", "url": "https://example.com/api"},
+    )
+    assert create_resp.status_code == 201
+    endpoint = create_resp.json()
+    assert endpoint["enabled"] is True
+
+    response = client.post(f"/endpoints/{endpoint['id']}/checks")
+    assert response.status_code == 201
+    body = response.json()
+    assert body["success"] is True
+    assert body["actual_status_code"] == 200

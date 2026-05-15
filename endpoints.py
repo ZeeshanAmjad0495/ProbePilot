@@ -19,6 +19,7 @@ def create_endpoint(data: EndpointCreate, db: Session = Depends(get_db)):
         method=data.method,
         request_headers=data.request_headers,
         request_body=data.request_body,
+        enabled=data.enabled,
     )
     db.add(endpoint)
     db.commit()
@@ -57,12 +58,7 @@ def get_endpoint(endpoint_id: int, db: Session = Depends(get_db)):
     return endpoint
 
 
-@router.put("/{endpoint_id}", response_model=EndpointResponse)
-def update_endpoint(endpoint_id: int, data: EndpointUpdate, db: Session = Depends(get_db)):
-    endpoint = db.query(Endpoint).filter(Endpoint.id == endpoint_id).first()
-    if endpoint is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Endpoint not found")
-
+def _update_endpoint(endpoint: Endpoint, data: EndpointUpdate) -> None:
     if data.name is not None:
         endpoint.name = data.name
     if data.url is not None:
@@ -77,6 +73,30 @@ def update_endpoint(endpoint_id: int, data: EndpointUpdate, db: Session = Depend
         endpoint.request_headers = data.request_headers
     if data.request_body is not None:
         endpoint.request_body = data.request_body
+    if data.enabled is not None:
+        endpoint.enabled = data.enabled
+
+
+@router.put("/{endpoint_id}", response_model=EndpointResponse)
+def update_endpoint(endpoint_id: int, data: EndpointUpdate, db: Session = Depends(get_db)):
+    endpoint = db.query(Endpoint).filter(Endpoint.id == endpoint_id).first()
+    if endpoint is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Endpoint not found")
+
+    _update_endpoint(endpoint, data)
+
+    db.commit()
+    db.refresh(endpoint)
+    return endpoint
+
+
+@router.patch("/{endpoint_id}", response_model=EndpointResponse)
+def patch_endpoint(endpoint_id: int, data: EndpointUpdate, db: Session = Depends(get_db)):
+    endpoint = db.query(Endpoint).filter(Endpoint.id == endpoint_id).first()
+    if endpoint is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Endpoint not found")
+
+    _update_endpoint(endpoint, data)
 
     db.commit()
     db.refresh(endpoint)
