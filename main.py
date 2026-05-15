@@ -16,6 +16,7 @@ from database import get_db
 from endpoints import router as endpoints_router
 from incidents import router as incidents_router
 from logging_config import setup_logging
+from metrics import router as metrics_router
 from schemas import HealthResponse
 
 setup_logging()
@@ -40,6 +41,7 @@ app = FastAPI(title="ProbePilot", lifespan=lifespan)
 app.include_router(endpoints_router)
 app.include_router(checks_router)
 app.include_router(incidents_router)
+app.include_router(metrics_router)
 
 
 @app.middleware("http")
