@@ -1,3 +1,5 @@
+import logging
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -5,7 +7,7 @@ import tomllib
 
 from alembic import command
 from alembic.config import Config
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -38,6 +40,27 @@ app = FastAPI(title="ProbePilot", lifespan=lifespan)
 app.include_router(endpoints_router)
 app.include_router(checks_router)
 app.include_router(incidents_router)
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start = time.perf_counter()
+    status_code = 500
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+        return response
+    finally:
+        duration_ms = int((time.perf_counter() - start) * 1000)
+        logging.getLogger("probepilot.middleware").info(
+            "request_completed",
+            extra={
+                "method": request.method,
+                "path": request.url.path,
+                "status_code": status_code,
+                "duration_ms": duration_ms,
+            },
+        )
 
 
 @app.get("/health", response_model=HealthResponse)

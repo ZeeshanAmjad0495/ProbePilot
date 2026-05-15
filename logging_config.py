@@ -1,3 +1,4 @@
+import datetime
 import json
 import logging
 import sys
@@ -32,9 +33,14 @@ STANDARD_LOG_ATTRS = frozenset(
 
 
 class JsonFormatter(logging.Formatter):
+    def formatTime(self, record: logging.LogRecord, datefmt: str | None = None) -> str:
+        return datetime.datetime.fromtimestamp(
+            record.created, tz=datetime.timezone.utc
+        ).isoformat()
+
     def format(self, record: logging.LogRecord) -> str:
         log_obj = {
-            "timestamp": self.formatTime(record),
+            "ts": self.formatTime(record),
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
