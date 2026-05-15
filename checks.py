@@ -98,6 +98,12 @@ def trigger_check(endpoint_id: int, db: Session = Depends(get_db)):
     if endpoint is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Endpoint not found")
 
+    if endpoint.enabled is False:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"detail": "Endpoint is disabled", "code": "endpoint_disabled"},
+        )
+
     method = endpoint.method
     headers = endpoint.request_headers or None
     body = endpoint.request_body

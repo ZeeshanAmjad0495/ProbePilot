@@ -14,6 +14,7 @@ class EndpointCreate(BaseModel):
     method: HttpMethod = Field(default="GET")
     request_headers: dict[str, str] | None = Field(default=None)
     request_body: str | None = Field(default=None)
+    enabled: bool = Field(default=True)
 
 
 class EndpointUpdate(BaseModel):
@@ -24,6 +25,7 @@ class EndpointUpdate(BaseModel):
     method: HttpMethod | None = Field(default=None)
     request_headers: dict[str, str] | None = Field(default=None)
     request_body: str | None = Field(default=None)
+    enabled: bool | None = Field(default=None)
 
 
 class EndpointResponse(BaseModel):
@@ -37,6 +39,7 @@ class EndpointResponse(BaseModel):
     method: str
     request_headers: dict | None
     request_body: str | None
+    enabled: bool
     created_at: datetime
 
 

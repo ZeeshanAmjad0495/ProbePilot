@@ -337,3 +337,61 @@ def test_persistence_across_requests():
     )
     assert update_response.status_code == 200
     assert update_response.json()["name"] == "Persist Updated"
+
+
+def test_create_endpoint_enabled_default():
+    response = client.post(
+        "/endpoints",
+        json={"name": "Test API", "url": "https://example.com/api"},
+    )
+    assert response.status_code == 201
+    body = response.json()
+    assert body["enabled"] is True
+
+
+def test_patch_endpoint_enabled():
+    create_response = client.post(
+        "/endpoints",
+        json={"name": "Test API", "url": "https://example.com/api"},
+    )
+    endpoint_id = create_response.json()["id"]
+
+    response = client.patch(
+        f"/endpoints/{endpoint_id}",
+        json={"enabled": False},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["enabled"] is False
+
+
+def test_put_endpoint_enabled():
+    create_response = client.post(
+        "/endpoints",
+        json={"name": "Test API", "url": "https://example.com/api"},
+    )
+    endpoint_id = create_response.json()["id"]
+
+    response = client.put(
+        f"/endpoints/{endpoint_id}",
+        json={"enabled": False},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["enabled"] is False
+
+
+def test_list_endpoints_reflects_enabled_false():
+    create_response = client.post(
+        "/endpoints",
+        json={"name": "Test API", "url": "https://example.com/api"},
+    )
+    endpoint_id = create_response.json()["id"]
+
+    client.patch(f"/endpoints/{endpoint_id}", json={"enabled": False})
+
+    response = client.get("/endpoints")
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["items"]) == 1
+    assert body["items"][0]["enabled"] is False
