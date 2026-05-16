@@ -124,4 +124,47 @@ def test_json_formatter_outputs_valid_json():
     assert parsed["level"] == "INFO"
     assert parsed["logger"] == "test"
     assert parsed["key"] == "value"
-    assert "timestamp" in parsed
+    assert "ts" in parsed
+    assert parsed["ts"].endswith("+00:00")
+
+
+def test_middleware_logs_request(caplog):
+    with caplog.at_level("INFO", logger="probepilot.middleware"):
+        response = client.get("/health")
+        assert response.status_code == 200
+
+    record = _find_record(caplog.records, "request_completed")
+    assert record is not None
+    assert record.method == "GET"
+    assert record.path == "/health"
+    assert record.status_code == 200
+    assert isinstance(record.duration_ms, int)
+
+
+def test_middleware_json_format():
+    import logging
+
+    from logging_config import JsonFormatter
+
+    formatter = JsonFormatter()
+    test_record = logging.LogRecord(
+        name="probepilot.middleware",
+        level=logging.INFO,
+        pathname="",
+        lineno=0,
+        msg="request_completed",
+        args=(),
+        exc_info=None,
+    )
+    test_record.method = "GET"
+    test_record.path = "/health"
+    test_record.status_code = 200
+    test_record.duration_ms = 42
+    output = formatter.format(test_record)
+    parsed = json.loads(output)
+    assert parsed["message"] == "request_completed"
+    assert parsed["method"] == "GET"
+    assert parsed["path"] == "/health"
+    assert parsed["status_code"] == 200
+    assert parsed["duration_ms"] == 42
+    assert parsed["ts"].endswith("+00:00")

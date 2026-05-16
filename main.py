@@ -1,3 +1,5 @@
+import logging
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -5,7 +7,7 @@ import tomllib
 
 from alembic import command
 from alembic.config import Config
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -14,6 +16,7 @@ from database import get_db
 from endpoints import router as endpoints_router
 from incidents import router as incidents_router
 from logging_config import setup_logging
+from metrics import router as metrics_router
 from schemas import HealthResponse
 from scheduler import start_scheduler, stop_scheduler
 from scheduler_api import router as scheduler_router
