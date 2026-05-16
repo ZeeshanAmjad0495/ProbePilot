@@ -99,3 +99,11 @@ class HealthResponse(BaseModel):
     version: str
     db: Literal["ok", "error"]
     error: str | None
+
+
+class MetricsSummary(BaseModel):
+    total_endpoints: int
+    endpoints_up: int
+    endpoints_down: int
+    open_incidents: int
+    resolved_incidents: int
