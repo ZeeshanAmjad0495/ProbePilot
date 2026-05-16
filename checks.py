@@ -92,18 +92,8 @@ def _evaluate_incidents(db: Session, endpoint_id: int, success: bool) -> None:
             )
 
 
-@router.post("/{endpoint_id}/checks", response_model=CheckResponse, status_code=status.HTTP_201_CREATED)
-def trigger_check(endpoint_id: int, db: Session = Depends(get_db)):
-    endpoint = db.query(Endpoint).filter(Endpoint.id == endpoint_id).first()
-    if endpoint is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Endpoint not found")
-
-    if endpoint.enabled is False:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={"detail": "Endpoint is disabled", "code": "endpoint_disabled"},
-        )
-
+def run_endpoint_check(db: Session, endpoint: Endpoint) -> Check:
+    """Execute a health check for an endpoint and record the result."""
     method = endpoint.method
     headers = endpoint.request_headers or None
     body = endpoint.request_body
@@ -111,8 +101,8 @@ def trigger_check(endpoint_id: int, db: Session = Depends(get_db)):
     start = time.perf_counter()
     try:
         with httpx.Client(timeout=endpoint.timeout_seconds) as client:
-            response = _execute_http_request(client, 
-                method, endpoint.url, headers=headers, content=body
+            response = _execute_http_request(
+                client, method, endpoint.url, headers=headers, content=body
             )
         elapsed_ms = int((time.perf_counter() - start) * 1000)
         actual_status_code = response.status_code
@@ -150,6 +140,21 @@ def trigger_check(endpoint_id: int, db: Session = Depends(get_db)):
     db.commit()
 
     return check
+
+
+@router.post("/{endpoint_id}/checks", response_model=CheckResponse, status_code=status.HTTP_201_CREATED)
+def trigger_check(endpoint_id: int, db: Session = Depends(get_db)):
+    endpoint = db.query(Endpoint).filter(Endpoint.id == endpoint_id).first()
+    if endpoint is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Endpoint not found")
+
+    if endpoint.enabled is False:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"detail": "Endpoint is disabled", "code": "endpoint_disabled"},
+        )
+
+    return run_endpoint_check(db, endpoint)
 
 
 @router.get("/{endpoint_id}/checks", response_model=ChecksPage)

@@ -18,6 +18,8 @@ from incidents import router as incidents_router
 from logging_config import setup_logging
 from metrics import router as metrics_router
 from schemas import HealthResponse
+from scheduler import start_scheduler, stop_scheduler
+from scheduler_api import router as scheduler_router
 
 setup_logging()
 
@@ -34,35 +36,16 @@ except Exception:
 async def lifespan(app: FastAPI):
     alembic_cfg = Config("alembic.ini")
     command.upgrade(alembic_cfg, "head")
+    start_scheduler()
     yield
+    stop_scheduler()
 
 
 app = FastAPI(title="ProbePilot", lifespan=lifespan)
 app.include_router(endpoints_router)
 app.include_router(checks_router)
 app.include_router(incidents_router)
-app.include_router(metrics_router)
-
-
-@app.middleware("http")
-async def log_requests(request: Request, call_next):
-    start = time.perf_counter()
-    status_code = 500
-    try:
-        response = await call_next(request)
-        status_code = response.status_code
-        return response
-    finally:
-        duration_ms = int((time.perf_counter() - start) * 1000)
-        logging.getLogger("probepilot.middleware").info(
-            "request_completed",
-            extra={
-                "method": request.method,
-                "path": request.url.path,
-                "status_code": status_code,
-                "duration_ms": duration_ms,
-            },
-        )
+app.include_router(scheduler_router)
 
 
 @app.get("/health", response_model=HealthResponse)
