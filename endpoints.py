@@ -20,6 +20,7 @@ def create_endpoint(data: EndpointCreate, db: Session = Depends(get_db)):
         request_headers=data.request_headers,
         request_body=data.request_body,
         enabled=data.enabled,
+        check_interval_seconds=data.check_interval_seconds,
     )
     db.add(endpoint)
     db.commit()
@@ -75,6 +76,8 @@ def _update_endpoint(endpoint: Endpoint, data: EndpointUpdate) -> None:
         endpoint.request_body = data.request_body
     if data.enabled is not None:
         endpoint.enabled = data.enabled
+    if data.check_interval_seconds is not None:
+        endpoint.check_interval_seconds = data.check_interval_seconds
 
 
 @router.put("/{endpoint_id}", response_model=EndpointResponse)

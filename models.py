@@ -18,6 +18,7 @@ class Endpoint(Base):
     request_headers: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     request_body: Mapped[str | None] = mapped_column(String, nullable=True)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("1"))
+    check_interval_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

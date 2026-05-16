@@ -15,6 +15,7 @@ class EndpointCreate(BaseModel):
     request_headers: dict[str, str] | None = Field(default=None)
     request_body: str | None = Field(default=None)
     enabled: bool = Field(default=True)
+    check_interval_seconds: int | None = Field(default=None, gt=0)
 
 
 class EndpointUpdate(BaseModel):
@@ -26,6 +27,7 @@ class EndpointUpdate(BaseModel):
     request_headers: dict[str, str] | None = Field(default=None)
     request_body: str | None = Field(default=None)
     enabled: bool | None = Field(default=None)
+    check_interval_seconds: int | None = Field(default=None, gt=0)
 
 
 class EndpointResponse(BaseModel):
@@ -40,6 +42,7 @@ class EndpointResponse(BaseModel):
     request_headers: dict | None
     request_body: str | None
     enabled: bool
+    check_interval_seconds: int | None
     created_at: datetime
 
 
